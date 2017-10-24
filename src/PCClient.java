@@ -1,5 +1,5 @@
 import java.io.*;
-import java.net.*;
+import java.net.Socket;
 
 /**
  * Maximum LEGO EV3: Building Robots with Java Brains
@@ -12,17 +12,33 @@ import java.net.*;
  * @version July 20, 2014
  */
 public class PCClient {
-
 	public static void main(String[] args) throws IOException {
 		String ip = "10.0.1.1"; // BT
-		if(args.length > 0)
-			ip = args[0];
-		Socket sock = new Socket(ip, EV3Server.port);
-		System.out.println("Connected");
-		InputStream in = sock.getInputStream();
-		DataInputStream dIn = new DataInputStream(in);
-		String str = dIn.readUTF();
-		System.out.println(str);
-		sock.close();
+		if(args.length > 0) ip = args[0];
+		while (true) {
+			try{
+				boolean connected = false;
+				Socket sock = null;
+				System.out.println("=================================================");
+				while (!connected) {
+					try{
+						sock = new Socket(ip, EV3Server.port);
+						connected = true;
+					} catch (Exception e) {
+						
+					}
+				}
+				System.out.println("Connected");
+				InputStream in = sock.getInputStream();
+				DataInputStream dIn = new DataInputStream(in);
+				while (sock.isConnected() && !sock.isClosed()) {
+					String str = dIn.readUTF();
+					System.out.println(str);
+				}
+				sock.close();
+			} catch(Exception e) {
+				
+			}
+		}
 	}
 }
