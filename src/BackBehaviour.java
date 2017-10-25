@@ -17,7 +17,7 @@ public class BackBehaviour implements Behavior{
 	
 	public void action() {
 		suppressed = false;
-		pilot.travel(-10, true);
+		pilot.travel(-5, true);
 		while(!suppressed && pilot.isMoving()) {
 			Thread.yield();
 		}
