@@ -1,5 +1,6 @@
 	
 import java.awt.List;
+import java.util.LinkedList;
 import java.util.function.DoubleToLongFunction;
 
 import javax.xml.crypto.dsig.XMLSignature.SignatureValue;
@@ -201,16 +202,17 @@ public class SimpleRobot {
 
 	public void forward() {
 		getInfo();
-		if ((getHeading() % 90 == 0 && rightDist > H_MOVE) || (getHeading() % 180 == 0 && rightDist > W_MOVE)) {
+		int heading = getHeading();
+		if ((heading % 180 != 0 && rightDist > H_MOVE) || (heading % 180 == 0 && rightDist > W_MOVE)) {
 			pilot.rotate(90);
 			if (getHeading() % 180 == 0) {
 				move(H_MOVE);
 			} else {
 				move(W_MOVE);
 			}
-		} else if ((getHeading() % 180 == 0 && frontDist < H_MOVE) || (getHeading() % 90 == 0 && frontDist < W_MOVE)) {
+		} else if ((heading % 180 == 0 && frontDist < H_MOVE) || (heading % 180 != 0 && frontDist < W_MOVE)) {
 			pilot.rotate(-90);
-		} else if (getHeading() % 180 == 0) {
+		} else if (heading % 180 == 0) {
 			//System.out.println("MOVE HHHHHHHHHHH");
 			if (robot_w == 0 || robot_w == W_GRID - 1){
 				canCalibrate = true;
@@ -417,8 +419,8 @@ public class SimpleRobot {
 				lcd.drawRect(bias+len*w, bias+len*h, len, len);
 			}
 		}
-		for (int h = 0; h < H_GRID; h++) {
-			for (int w = 0; w < W_GRID; w++) {
+		for (int h = H_GRID-1; h >= 0; h--) {
+			for (int w = W_GRID-1; w >= 0; w--) {
 				if (gridMap.isOccupied(h, w) == 1) {
 					lcd.fillRect(bias+len*w, bias+len*h, len, len);
 				} else if (gridMap.isOccupied(h, w) == -1) {
@@ -450,7 +452,62 @@ public class SimpleRobot {
 		server.start();
 	}
 	
-	public void moveTo(List path){
+	public void navigateToGrid(int[] goal){
+		LinkedList<int[]> path = gridMap.aStarPathFinding(new int[]{robot_h,robot_w}, goal);
+		for(int i=0; i<=path.size()-1;i++){
+			moveToGrid(path.get(i));
+		}
+	}
+	
+	public void moveToGrid(int[] target){
+		int heading = getHeading();
+		if (target[0] == robot_h+1) {
+			// go up
+			if (heading == 0){
+				move(H_MOVE);
+			} else if (heading == 180) {
+				move(-H_MOVE);
+			} else {
+				pilot.rotate(-heading);
+				move(H_MOVE);
+			}
+		} else if (target[0] == robot_h-1){
+			// go down
+			if (heading == 0){
+				move(-H_MOVE);
+			} else if (heading == 180) {
+				move(H_MOVE);
+			} else {
+				pilot.rotate(heading);
+				move(H_MOVE);
+			}
+		} else if (target[1] == robot_w+1) {
+			// go left
+			if (heading == 90) {
+				move(-W_MOVE);
+			} else if (heading == -90) {
+				move(W_MOVE);
+			} else if (heading == 0) {
+				pilot.rotate(-90);
+				move(W_MOVE);
+			} else if (heading == 180) {
+				pilot.rotate(90);
+				move(W_MOVE);
+			}
+		} else if (target[1] == robot_w-1) {
+			// go right
+			if (heading == 90) {
+				move(W_MOVE);
+			} else if (heading == -90) {
+				move(-W_MOVE);
+			} else if (heading == 0) {
+				pilot.rotate(90);
+				move(W_MOVE);
+			} else if (heading == 180) {
+				pilot.rotate(-90);
+				move(W_MOVE);
+			}
+		}
 		
 	}
 	

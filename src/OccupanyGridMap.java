@@ -1,4 +1,5 @@
 import java.io.FileNotFoundException;
+import java.net.PasswordAuthentication;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -105,8 +106,9 @@ public class OccupanyGridMap {
 	
 	public String print() {
 		String str = "";
-		for (int j=0; j<=occupiedTimes[0].length-1;j++){
-			for (int i=0; i<occupiedTimes.length; i++){
+		System.out.println(occupiedTimes.length);
+		for (int i=occupiedTimes.length-1; i>=0;i--){
+			for (int j=occupiedTimes[0].length-1; j>=0; j--){
 				if (detectedTimes[i][j] == 0){
 					str += "x";
 				} else {
@@ -127,7 +129,7 @@ public class OccupanyGridMap {
 	}
 	
 	// for now, it will just print the path
-	public List aStarPathFinding(int[] start, int[] goal) {
+	public LinkedList<int[]> aStarPathFinding(int[] start, int[] goal) {
 		LinkedList<int[]> openList = new LinkedList<int[]>();
 		Set<String> closedList = new HashSet<String>();
 		HashMap<String, Integer> gValues = new HashMap<String,Integer>();
@@ -136,7 +138,6 @@ public class OccupanyGridMap {
 		openList.add(start);
 		gValues.put(toStr(start), 0);
 		parents.put(toStr(start), null);
-		int i = 0;
 		while (!(found || openList.isEmpty())) {
 			//System.out.println("Step: " + i++);
 			int[] minialGrid = openList.get(0);
@@ -168,10 +169,13 @@ public class OccupanyGridMap {
 		}
 		int[] grid = goal;
 		LinkedList<int[]> path = new LinkedList<int[]>();
-		System.out.print("Path: ");
-		while (grid != null) {
+		System.out.print("Path: Start"+toStr(start));
+		while (!toStr(grid).equals(toStr(start))) {
 			path.addFirst(grid);
 			grid = parents.get(toStr(grid));
+		}
+		for (int i=0; i<=path.size()-1; i++){
+			System.out.print("->"+toStr(path.get(i)));
 		}
 		return path;
 	}
@@ -201,19 +205,20 @@ public class OccupanyGridMap {
 		return (int)(num*90 + remainder)*sign;
 	}
 	
+
 	public static void main(String[] args) {
-		OccupanyGridMap map = new OccupanyGridMap(5, 4, 0, 0);
-		for (int i=0; i<=4; i++){
-			for (int j=0; j<=3; j++){
+		OccupanyGridMap map = new OccupanyGridMap(7, 6, 0, 0);
+		for (int i=0; i<=6; i++){
+			for (int j=0; j<=5; j++){
 				map.update(i, j, false);
 			}
 		}
-		map.update(0, 2, true);
-		map.update(1, 2, true);
-		map.update(2, 2, true);
+		map.update(6, 5, true);
+		map.update(4, 4, true);
+		map.update(3, 5, true);
 		System.out.println(map.print());
-		int[] start = {0,0};
+		int[] start = {4,3};
 		int[] goal = {0,3};
-		map.aStarPathFinding(start, goal);
+		LinkedList<int[]> path = map.aStarPathFinding(start, goal);
 	}
 }
