@@ -1,10 +1,12 @@
+package behaviors;
 import lejos.robotics.subsumption.Behavior;
+import main.SmartRobot;
 
-public class MoveBehaviour implements Behavior{
+public class MoveBehavior implements Behavior{
 	public boolean suppressed;
 	private SmartRobot myRobot;
 	
-	public MoveBehaviour(SmartRobot robot) {
+	public MoveBehavior(SmartRobot robot) {
 		myRobot = robot;
 	}
 	
@@ -14,8 +16,9 @@ public class MoveBehaviour implements Behavior{
 	
 	public void action() {
 		suppressed = false;
-		while (!suppressed) {
-			myRobot.forward();
+		boolean finished = false;
+		while (!suppressed && !finished) {
+			finished = myRobot.forward();
 		}
 	}
 

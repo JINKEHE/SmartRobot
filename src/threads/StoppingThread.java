@@ -1,10 +1,13 @@
+package threads;
 import lejos.hardware.Button;
 import lejos.hardware.Keys;
+import main.SmartRobot;
 
-public class ThreadToClose extends Thread {
+public class StoppingThread extends Thread {
 	private SmartRobot robot;
-	public ThreadToClose(SmartRobot robot){
+	public StoppingThread(SmartRobot robot){
 		this.robot = robot;
+		this.setDaemon(true);
 	}
 	public void run(){
 		while (true) {

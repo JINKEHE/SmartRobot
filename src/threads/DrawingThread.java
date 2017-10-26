@@ -1,3 +1,6 @@
+package threads;
+import main.SmartRobot;
+
 public class DrawingThread extends Thread {
 	private SmartRobot myRobot;
 	private int delay;
@@ -5,7 +8,7 @@ public class DrawingThread extends Thread {
 	public DrawingThread(SmartRobot myRobot, int delay) {
 		this.myRobot = myRobot;
 		this.delay = delay;
-		this.setDaemon(false);
+		//this.setDaemon(true);
 	}
 
 	public void run() {

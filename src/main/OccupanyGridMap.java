@@ -1,18 +1,9 @@
-import java.io.FileNotFoundException;
-import java.net.PasswordAuthentication;
-import java.nio.file.Path;
+package main;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.IntPredicate;
-
-import javax.xml.stream.events.StartDocument;
-
-import lejos.robotics.navigation.SteeringPilot;
 
 public class OccupanyGridMap {
 	private int height, width;
@@ -59,7 +50,6 @@ public class OccupanyGridMap {
 	public void updatePassed(int h, int w) {
 		update(h, w, false);
 		passedBy[h][w] = 1;
-		//System.out.println("Robot jsut passed grid: " + h + "," + w);
 	}
 	
 	public void updateEndPoint(int[] endGrid) {
@@ -136,10 +126,8 @@ public class OccupanyGridMap {
 		gValues.put(toStr(start), 0);
 		parents.put(toStr(start), null);
 		while (!(found || openList.isEmpty())) {
-			//System.out.println("Step: " + i++);
 			int[] minialGrid = openList.get(0);
 			for (int[] grid: openList){
-				//System.out.println(toStr(grid)+": "+(gValues.get(toStr(grid))+estimate(grid, goal)));
 				if (gValues.get(toStr(grid)) + estimate(grid, goal) < gValues.get(toStr(minialGrid)) + estimate(minialGrid, goal)){
 					minialGrid = grid;
 				}
@@ -246,6 +234,5 @@ public class OccupanyGridMap {
 		map.update(3, 5, true);
 		System.out.println(map.print());
 		map.printPath(map.findTheBestPathToExplore(new int[]{4,5}));
-		//map.printPath(map.aStarPathFinding(new int[]{4,5},new int[]{0,0}));
 	}
 }

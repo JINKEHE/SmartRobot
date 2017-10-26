@@ -1,12 +1,14 @@
+package behaviors;
 import lejos.robotics.navigation.MovePilot;
 import lejos.robotics.subsumption.Behavior;
+import main.SmartRobot;
 
-public class BackBehaviour implements Behavior{
+public class BackBehavior implements Behavior{
 	public boolean suppressed;
 	private SmartRobot myRobot;
 	private MovePilot pilot;
 	
-	public BackBehaviour(SmartRobot robot, MovePilot pilot) {
+	public BackBehavior(SmartRobot robot, MovePilot pilot) {
 		myRobot = robot;
 		this.pilot = pilot;
 	}
