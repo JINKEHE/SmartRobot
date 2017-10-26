@@ -2,9 +2,9 @@ import lejos.robotics.subsumption.Behavior;
 
 public class MoveBehaviour implements Behavior{
 	public boolean suppressed;
-	private SimpleRobot myRobot;
+	private SmartRobot myRobot;
 	
-	public MoveBehaviour(SimpleRobot robot) {
+	public MoveBehaviour(SmartRobot robot) {
 		myRobot = robot;
 	}
 	

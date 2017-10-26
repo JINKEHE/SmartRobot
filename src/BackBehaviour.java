@@ -3,10 +3,10 @@ import lejos.robotics.subsumption.Behavior;
 
 public class BackBehaviour implements Behavior{
 	public boolean suppressed;
-	private SimpleRobot myRobot;
+	private SmartRobot myRobot;
 	private MovePilot pilot;
 	
-	public BackBehaviour(SimpleRobot robot, MovePilot pilot) {
+	public BackBehaviour(SmartRobot robot, MovePilot pilot) {
 		myRobot = robot;
 		this.pilot = pilot;
 	}
