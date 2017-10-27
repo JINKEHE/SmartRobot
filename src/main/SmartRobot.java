@@ -4,6 +4,7 @@ import behaviors.BackBehavior;
 import behaviors.MoveBehavior;
 import lejos.hardware.Brick;
 import lejos.hardware.BrickFinder;
+import lejos.hardware.Button;
 import lejos.hardware.sensor.EV3ColorSensor;
 import lejos.hardware.sensor.EV3IRSensor;
 import lejos.hardware.sensor.EV3TouchSensor;
@@ -33,7 +34,7 @@ public class SmartRobot {
 	private SampleProvider leftBumpSP, rightBumpSP, colourSP, ultrasonicDistSP;
 	private float[] leftBumpSample, rightBumpSample, colourSample, ultrasonicDistSample;
 	private Arbitrator arbitrator;
-	public MovePilot pilot;
+	private MovePilot pilot;
 	private NXTRegulatedMotor uSensorMotor;
 	private MoveBehavior moveBehavior;
 	private BackBehavior backBehavior;
@@ -45,8 +46,8 @@ public class SmartRobot {
 	private boolean taskFinished = false;
 	private boolean readyToEnd = false;
 	// keep track of the current location of the robot
-	public int robotH = 0;
-	public int robotW = 0;
+	private int robotH = 0;
+	private int robotW = 0;
 	// constant variables
 	private static final double HEIGHT_OF_ARENA = 193;
 	private static final double WIDTH_OF_ARENA = 150;
@@ -57,10 +58,12 @@ public class SmartRobot {
 	private static final double H_MOVE = HEIGHT_OF_ARENA / H_GRID;
 	private static final double W_MOVE = WIDTH_OF_ARENA / W_GRID;
 	private static final double RESERVED_DIST_H = 11;
-	private static final double RESERVED_DIST_W = 15;
+	private static final double RESERVED_DIST_RIGHT = 12;
 	// offset and diameter
 	private static final double DIAMETER = 3.3;
-	private static final double OFFSET = 9.25;
+	private static final double OFFSET = 9.4;
+	private static final double ANGULAR_SPEED = 30;
+	private static final double BLUE_COLOR_THRESHOLD = 0.05;
 	// set up ultrasonic sensor
 	private void setupUltrasonicSensor() {
 		uSensorMotor = Motor.A;
@@ -118,7 +121,7 @@ public class SmartRobot {
 		Wheel rightWheel = WheeledChassis.modelWheel(Motor.C, DIAMETER).offset(OFFSET);
 		Chassis myChassis = new WheeledChassis(new Wheel[] { leftWheel, rightWheel }, WheeledChassis.TYPE_DIFFERENTIAL);
 		pilot = new MovePilot(myChassis);
-		pilot.setAngularSpeed(30);
+		pilot.setAngularSpeed(ANGULAR_SPEED);
 	}
 
 	// create a new occupancy grid map
@@ -210,7 +213,11 @@ public class SmartRobot {
 	public boolean forward() {
 		if (taskFinished) return true;
 		if (readyToEnd) {
-			findEndPoint();
+			if (map.isEndGridFound()==true){
+				navigateToGrid(map.getEndPoint());
+			} else {
+				findEndPoint();
+			}
 		} else {
 			buildMap();
 		}
@@ -218,7 +225,7 @@ public class SmartRobot {
 	}
 	
 	// explore the arena and build the map
-	public void buildMap(){
+	private void buildMap(){
 		getInformation();
 		int heading = getHeading();
 		if ((heading % 180 != 0 && rightDistance > H_MOVE) || (heading % 180 == 0 && rightDistance > W_MOVE)) {
@@ -229,11 +236,11 @@ public class SmartRobot {
 				move(W_MOVE);
 			}
 			needCalibrating = false;
-		} else if ((heading % 180 == 0 && frontDistance < H_MOVE) || (heading % 180 != 0 && frontDistance < W_MOVE)) {
-			System.out.println("Distance: " + (RESERVED_DIST_H-frontDistance));
+		} else if ((heading%180==0 && frontDistance<H_MOVE) || (heading%180!=0 && frontDistance<W_MOVE)) {
+			System.out.println("Front: "+frontDistance);
 			pilot.travel(frontDistance-RESERVED_DIST_H);
 			pilot.rotate(-90);
-			pilot.travel(-2);
+			// pilot.travel(-2);
 			needCalibrating = false;
 		} else if (heading % 180 == 0) {
 			if (robotW == 0 || robotW == W_GRID - 1){
@@ -246,65 +253,55 @@ public class SmartRobot {
 			}
 			move(W_MOVE);
 		}
-		// after returning to the start point
+		// after returning to the start point, start to find the end point
 		if (map.isMapFinished() && robotH==0 && robotW==0){
 			readyToEnd = true;
 		}
 	}
 	
-	// process the information got
+	// process the information (raw sensor data)
 	private void processInformation(double distance, int relativeHeading) {
 		int sensorHeading = (int) (relativeHeading - getHeading());
 		if (sensorHeading <= -180) sensorHeading += 360;
 		if (sensorHeading >= 180) sensorHeading = 360 - sensorHeading;
-		int[] robot_grid = new int[]{robotH,robotW};
-		int h_robot = robot_grid[0];
-		int w_robot = robot_grid[1];
-		int h_target=robot_grid[0];
-		int w_target=robot_grid[1];
+		int targetH=robotH, targetW=robotW;
 		if (sensorHeading == 0) {
-			h_target += 1 + distance / H_MOVE;
-			for (int h=h_robot+1; h<h_target && h <=H_GRID-1 && h>=0; h++){
-				map.update(h, w_robot, false);
+			targetH += 1 + distance / H_MOVE;
+			for (int h=robotH+1; h<targetH && h<=H_GRID-1 && h>=0; h++){
+				map.update(h, targetW, false);
 			}
 		} else if (sensorHeading == 180) {
-			h_target -= 1 + distance / H_MOVE;
-			for (int h=h_target+1; h<h_robot && h <= H_GRID-1 && h>=0; h++){
-				map.update(h, w_robot, false);
+			targetH -= 1 + distance / H_MOVE;
+			for (int h=targetH+1; h<robotH && h<=H_GRID-1 && h>=0; h++){
+				map.update(h, targetW, false);
 			}
 		} else if (sensorHeading == 90) {
-			w_target += 1 + distance / W_MOVE;
-			for (int w=w_robot+1; w<w_target && w <= W_GRID-1 && w>=0; w++){
-				map.update(h_robot,w, false);
+			targetW += 1 + distance / W_MOVE;
+			for (int w=robotW+1; w<targetW && w<=W_GRID-1 && w>=0; w++){
+				map.update(targetH, w, false);
 			}
  		} else if (sensorHeading == -90) {
- 			w_target -= 1 + distance / W_MOVE;
-			for (int w=w_target+1; w<w_target && w <= W_GRID-1 && w>=0; w++){
-				map.update(h_robot,w, false);
+ 			targetW -= 1 + distance / W_MOVE;
+			for (int w=targetW+1; w<robotW && w<=W_GRID-1 && w>=0; w++){
+				map.update(targetH, w, false);
 			}
  		} 
-		if (h_target <= H_GRID-1 && w_target <= W_GRID-1 && h_target >= 0 && w_target >= 0) {
-			map.update(h_target,w_target, true);
+		if (targetH<=H_GRID-1 && targetW<=W_GRID-1 && targetH>= 0 && targetW>= 0) {
+			map.update(targetH,targetW, true);
 		}
 	}
 	
+	//double tantheta;
+	//tantheta = p;
+	//theta = Math.atan(tantheta)*180/Math.PI
+	
 	// get information from the environment using sensors
-	public void getInformation() {
-		float color = getColor();
-		boolean mapFinished = map.isMapFinished();
-		int[] robotGrid = new int[]{robotH,robotW};
-		map.updatePassed(robotGrid[0], robotGrid[1]);
-		if (color < 0.05) {
-			Sound.beep();
-			// if (readyToEnd == true) {
-			if (mapFinished == true) {
-				Sound.beep();
-				stop();
-			} else {
-				map.updateEndPoint(robotGrid);
-			}
-		}
-		if (!mapFinished) {
+	private void getInformation() {
+		// if blue is detected
+		float colorDetected = getColor();
+		if (robotH<=H_GRID-1&&robotH>=0&&robotW<=W_GRID-1&&robotW>=0) map.updatePassed(robotH, robotW);
+		if (!readyToEnd) {
+			if (colorDetected < BLUE_COLOR_THRESHOLD) map.updateEndPoint(new int[]{robotH,robotW});
 			uSensorMotor.rotate(90);
 			leftDistance = getSingleDistance();
 			processInformation(leftDistance, 90);
@@ -312,49 +309,55 @@ public class SmartRobot {
 			frontDistance = getSingleDistance();
 			processInformation(frontDistance, 0);
 			uSensorMotor.rotate(-90);
-			double lastRight = rightDistance;
+			double lastRightDist = rightDistance;
 			rightDistance = getSingleDistance();
 			processInformation(rightDistance, -90);
 			if (needCalibrating == true) {
 				needCalibrating = false;
-				double theta;
-				double sintheta;
-				//double tantheta;
-				double p;
-				if (getHeading() % 180 == 0) {
-					p = (rightDistance - lastRight)/H_MOVE;			
-				} else {
-					p = (rightDistance - lastRight)/W_MOVE;
-				}
-				sintheta = (-1 + Math.sqrt(1+4*Math.pow(p, 2)))/(2*p);
-				//tantheta = p;
-				//theta = Math.atan(tantheta)*180/Math.PI;
-				theta = Math.asin(sintheta)*180/Math.PI;
-				Pose oldPose = poseProvider.getPose();
-				pilot.rotate(theta);
-				poseProvider.setPose(oldPose);
-				
-				if(!robotIsAtCorner()){
-					oldPose = poseProvider.getPose();
-					if (getHeading()%180==0){
-						sintheta=(RESERVED_DIST_H-rightDistance)/H_MOVE;
-					} else{
-						sintheta=(RESERVED_DIST_W-rightDistance)/W_MOVE;
-					}
-					theta=Math.asin(sintheta);
-					pilot.rotate(theta);
-					poseProvider.setPose(oldPose);
-				}
+				calibrate(lastRightDist, rightDistance);
 			}
-			
 			uSensorMotor.rotate(90);
 			frontDistance = getSingleDistance();
 			processInformation(frontDistance, 0);
+		} else if (colorDetected < BLUE_COLOR_THRESHOLD) {
+			Sound.twoBeeps();
+			stop();
 		}
 	}
 
+	// do some calibration
+	private void calibrate(double lastRightDist, double rightDist){
+		double theta, sintheta, distDiff;
+		if (getHeading() % 180 == 0) {
+			distDiff = (rightDistance-lastRightDist)/H_MOVE;			
+		} else {
+			distDiff = (rightDistance-lastRightDist)/W_MOVE;
+		}
+		sintheta = (-1 + Math.sqrt(1+4*Math.pow(distDiff, 2)))/(2*distDiff);
+		if (sintheta>=0.5) sintheta = (-1 - Math.sqrt(1+4*Math.pow(distDiff, 2)))/(2*distDiff);
+		theta = Math.asin(sintheta)*180/Math.PI;
+		Pose oldPose = poseProvider.getPose();
+		Pose copyPose = new Pose(oldPose.getX(), oldPose.getY(), oldPose.getHeading());
+		pilot.rotate(theta);
+		if(!robotIsAtCorner()){
+			if (getHeading()%180==0){
+				sintheta=(RESERVED_DIST_RIGHT-rightDistance)/H_MOVE;
+			} else{
+				sintheta=(RESERVED_DIST_RIGHT-rightDistance)/W_MOVE;
+			}
+			System.out.println(sintheta);
+			theta=Math.asin(sintheta)*180/Math.PI;
+			System.out.println(theta);
+			Button.waitForAnyPress();
+			drawMap();
+			pilot.rotate(-theta);
+		}
+		poseProvider.setPose(copyPose);
+	}
+	
 	// stop the robot 
 	public void stop() {
+		System.exit(0);
 		System.out.println("STOP");
 		arbitrator.stop();
 		taskFinished = true;
@@ -475,7 +478,8 @@ public class SmartRobot {
 		setupPoseProvider();
 		setupBehaviors();
 		new StoppingThread(this).start();
-		new DrawingThread(this,20).start();
+		//new DrawingThread(this,20).start();
+		//pilot.rotate(90);
 		arbitrator.go();
 	}
 	

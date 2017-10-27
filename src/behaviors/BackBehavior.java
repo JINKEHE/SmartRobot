@@ -1,4 +1,5 @@
 package behaviors;
+import lejos.hardware.Button;
 import lejos.robotics.navigation.MovePilot;
 import lejos.robotics.subsumption.Behavior;
 import main.SmartRobot;
@@ -19,7 +20,7 @@ public class BackBehavior implements Behavior{
 	
 	public void action() {
 		suppressed = false;
-		pilot.travel(-5, true);
+		Button.waitForAnyPress();
 		while(!suppressed && pilot.isMoving()) {
 			Thread.yield();
 		}
