@@ -4,6 +4,8 @@ import lejos.robotics.navigation.MovePilot;
 import lejos.robotics.subsumption.Behavior;
 import main.SmartRobot;
 
+// the robot will perform this behavior when it runs into something
+// ideally, the arbitrary will never turn to this behavior
 public class BackBehavior implements Behavior{
 	public boolean suppressed;
 	private SmartRobot myRobot;
@@ -22,6 +24,7 @@ public class BackBehavior implements Behavior{
 		suppressed = false;
 		Button.waitForAnyPress();
 		while(!suppressed && pilot.isMoving()) {
+			// do something here to correct its movement
 			Thread.yield();
 		}
 	}

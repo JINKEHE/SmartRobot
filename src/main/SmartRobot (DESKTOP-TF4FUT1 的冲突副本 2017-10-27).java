@@ -1,4 +1,5 @@
 package main;
+import java.nio.file.spi.FileSystemProvider;
 import java.util.LinkedList;
 import behaviors.BackBehavior;
 import behaviors.MoveBehavior;
@@ -38,7 +39,7 @@ public class SmartRobot {
 	private NXTRegulatedMotor uSensorMotor;
 	private MoveBehavior moveBehavior;
 	private BackBehavior backBehavior;
-	private OccupancyGridMap map;
+	private OccupanyGridMap map;
 	private GraphicsLCD lcd;
 	private double rightDistance, frontDistance, leftDistance;
 	private OdometryPoseProvider poseProvider;
@@ -62,8 +63,8 @@ public class SmartRobot {
 	// offset and diameter
 	private static final double DIAMETER = 3.3;
 	private static final double OFFSET = 10;
-	// private static final double ANGULAR_SPEED = 30;
-	private static final double BLUE_COLOR_THRESHOLD = 0.011;
+	private static final double ANGULAR_SPEED = 30;
+	private static final double BLUE_COLOR_THRESHOLD = 0.05;
 	private static final int REPEAT_SCAN_TIMES = 4;
 	// set up ultrasonic sensor
 	private void setupUltrasonicSensor() {
@@ -129,17 +130,7 @@ public class SmartRobot {
 
 	// create a new occupancy grid map
 	private void setupGridMap() {
-		map = new OccupancyGridMap(H_GRID, W_GRID);
-		/*
-		for (int i=0; i<=H_GRID-1; i++){
-			for (int j=0; j<=W_GRID-1; j++){
-				map.update(i, j, false);
-			}
-		}
-		readyToEnd = true;
-		map.update(1, 1, true);
-		map.update(1, 2, true);
-		map.update(5, 0, true);*/
+		map = new OccupanyGridMap(H_GRID, W_GRID);
 	}
 
 	// set up the behaviors
@@ -375,7 +366,7 @@ public class SmartRobot {
 			//System.out.println("Theta: "+theta);
 			//Button.waitForAnyPress();
 			//drawMap();
-			pilot.rotate(-2*theta/3);
+			pilot.rotate(-theta/2);
 		}
 		poseProvider.setPose(copyPose);
 	}
@@ -431,8 +422,6 @@ public class SmartRobot {
 				pilot.rotate(-heading);
 				move(H_MOVE);
 			}
-			
-			needCalibrating = true;
 		} else if (goal[0] == robotH-1){
 			// go down
 			if (heading == 0){
@@ -503,12 +492,19 @@ public class SmartRobot {
 		setupPoseProvider();
 		setupBehaviors();
 		new StoppingThread(this).start();
-		new DrawingThread(this,200).start();;
+		new DrawingThread(this,200).start();
 		arbitrator.go();
+		readyToEnd = true;
+		for (int i=0; i<=H_GRID-1; i++){
+			for (int j=0; j<=W_GRID-1; j++){
+				map.update(i, j, false);
+			}
+		}
 	}
 	
 	public static void main(String[] args) {
 		SmartRobot myRobot = new SmartRobot();
+		myRobot.navigateToGrid(new int[]{0,5});
 		myRobot.closeRobot();
 	}
 }
