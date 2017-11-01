@@ -22,7 +22,7 @@ public class OccupancyGridMap {
 	// whether the end point is found
 	private boolean endPointFound = false;
 	// the threshold to determine whether a grid is considered as occupied
-	private static final double OCCUPIED_THRESHOLD = 0.3;
+	private static final double OCCUPIED_THRESHOLD = 0.7;
 	
 	public OccupancyGridMap(int h_grids, int w_grids) {
 		height = h_grids;
