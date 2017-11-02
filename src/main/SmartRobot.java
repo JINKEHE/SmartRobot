@@ -31,10 +31,7 @@ import lejos.hardware.lcd.GraphicsLCD;
 // make get distance method more accurate
 // pilot angular speed
 // configuration file
-
-
-// not 305, 
-
+                      
 public class SmartRobot {
 	private Brick ev3;
 	private EV3TouchSensor leftBump, rightBump;
@@ -70,7 +67,7 @@ public class SmartRobot {
 	// distance of each movement
 	private static final double H_MOVE = HEIGHT_OF_ARENA / H_GRID;
 	private static final double W_MOVE = WIDTH_OF_ARENA / W_GRID;
-	private static final double RESERVED_DIST_H = 9;
+	private static final double RESERVED_DIST_H = 11;
 	private static final double RESERVED_DIST_RIGHT = 13;
 	private static final double THIRD_CALIBRATE_MOVE = 9;
 	// offset and diameter

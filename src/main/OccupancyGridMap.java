@@ -144,7 +144,7 @@ public class OccupancyGridMap {
 			}
 			openList.remove(minialGrid);
 			closedList.add(toString(minialGrid));
-			for (int[] g: new int[][]{{1,0}, {-1,0}, {0,1}, {0,-1}}){
+			for (int[] g: new int[][]{{-1,0}, {0,-1}, {0,1}, {1,0}}){
 				int h = minialGrid[0] + g[0];
 				int w = minialGrid[1] + g[1];
 				int[] newNode = {h,w};
