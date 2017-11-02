@@ -5,6 +5,8 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
 
+import threads.ServerThread;
+
 // the class of Occupancy Grid Map
 public class OccupancyGridMap {
 	// the height, width of the map
@@ -22,7 +24,7 @@ public class OccupancyGridMap {
 	// whether the end point is found
 	private boolean endPointFound = false;
 	// the threshold to determine whether a grid is considered as occupied
-	private static final double OCCUPIED_THRESHOLD = 0.7;
+	private static final double OCCUPIED_THRESHOLD = 0.6;
 	
 	public OccupancyGridMap(int h_grids, int w_grids) {
 		height = h_grids;

@@ -32,9 +32,6 @@ import lejos.hardware.lcd.GraphicsLCD;
 // pilot angular speed
 // configuration file
 
-
-// not 305, 
-
 public class SmartRobot {
 	private Brick ev3;
 	private EV3TouchSensor leftBump, rightBump;
@@ -55,7 +52,7 @@ public class SmartRobot {
 	private boolean needCalibrating = false;
 	private boolean taskFinished = false;
 	private boolean readyToEnd = false;
-	private int lastHeading = -1;
+	private double lastHeading = -1;
 	private int step = 0;
 	private ServerThread server;
 	// keep track of the current location of the robot
@@ -70,16 +67,16 @@ public class SmartRobot {
 	// distance of each movement
 	private static final double H_MOVE = HEIGHT_OF_ARENA / H_GRID;
 	private static final double W_MOVE = WIDTH_OF_ARENA / W_GRID;
-	private static final double RESERVED_DIST_H = 9;
-	private static final double RESERVED_DIST_RIGHT = 13;
-	private static final double THIRD_CALIBRATE_MOVE = 9;
+	private static final double RESERVED_DIST_H = 8.5;
+	private static final double RESERVED_DIST_RIGHT = 10;
 	// offset and diameter
 	private static final double DIAMETER = 3.3;
 	private static final double OFFSET = 10;
 	private static final double ANGULAR_SPEED = 100;
 	private static final double ANGULAR_ACCELERATION = 200;
 	private static final double BLUE_COLOR_THRESHOLD = 0.1;
-	private static final int REPEAT_SCAN_TIMES = 6;
+	private static final int REPEAT_SCAN_TIMES = 4;
+	private static final boolean DEBUG_MODE = false;
 	// set up ultrasonic sensor
 	private void setupUltrasonicSensor() {
 		uSensorMotor = Motor.A;
@@ -101,12 +98,7 @@ public class SmartRobot {
 			}
 		}
 		if (validCount == 0){
-			uSensorMotor.rotate(-3);
-			float upperDist = getSingleDistance();
-			uSensorMotor.rotate(6);
-			float lowerDist = getSingleDistance();
-			uSensorMotor.rotate(-3);
-			return (upperDist+lowerDist)/2;
+			return 3;
 		} else {
 			return validSum / validCount;
 		}
@@ -150,16 +142,14 @@ public class SmartRobot {
 
 	// create a new occupancy grid map
 	private void setupGridMap() {
-	
 		map = new OccupancyGridMap(H_GRID, W_GRID);
-		/*
-		for (int i=0; i<=H_GRID-1; i++){
+		/*for (int i=0; i<=H_GRID-1; i++){
 			for (int j=0; j<=W_GRID-1; j++){
 				map.update(i, j, false);
 			}
 		}
 		readyToEnd = true;
-		map.update(4, 1, true);
+		map.update(1, 0, true);
 		//map.update(1, 4, true);
 		map.updateEndPoint(new int[]{H_GRID-1,W_GRID-1});*/
 	}
@@ -223,22 +213,21 @@ public class SmartRobot {
 	}
 	
 	// move a specific distance and keep track of the grid the robot is currently in
-	private void move(double distance) {
+	public void move(double distance) {
 		pilot.travel(distance);
 		int heading = getHeading();
-		int sign = distance > 0 ? 1 : -1;
 		switch(heading){
 		case 0:
-			robotH += 1 * sign;
+			robotH += 1;
 			break;
 		case 180:
-			robotH -= 1 * sign;
+			robotH -= 1;
 			break;
 		case -90:
-			robotW += 1 * sign;
+			robotW += 1;
 			break;
 		case 90:
-			robotW -= 1 * sign;
+			robotW -= 1;
 			break;
 		default:
 			break;
@@ -247,7 +236,6 @@ public class SmartRobot {
 	
 	// return whether task is finished
 	public boolean forward() {
-		//Button.waitForAnyPress();
 		if (taskFinished) {
 			return true;
 		}
@@ -277,11 +265,10 @@ public class SmartRobot {
 				move(W_MOVE);
 			}
 			needCalibrating = false;
-		/*} else if ((heading%180==0 && frontDistance<H_MOVE && leftDistance < W_MOVE) || (heading%180!=0 && frontDistance<W_MOVE && leftDistance < H_MOVE)) {
+		} else if ((heading%180==0 && frontDistance<H_MOVE && leftDistance < W_MOVE) || (heading%180!=0 && frontDistance<W_MOVE && leftDistance < H_MOVE)) {
 			pilot.rotate(-180);
 			needCalibrating = false;
-		}*/} else if ((heading%180==0 && frontDistance<H_MOVE) || (heading%180!=0 && frontDistance<W_MOVE)) {
-			pilot.travel(frontDistance-RESERVED_DIST_H);
+		} else if ((heading%180==0 && frontDistance<H_MOVE) || (heading%180!=0 && frontDistance<W_MOVE)) {
 			pilot.rotate(-90);
 			needCalibrating = false;
 		} else if (heading % 180 == 0) {
@@ -309,31 +296,27 @@ public class SmartRobot {
 		int targetH=robotH, targetW=robotW;
 		if (sensorHeading == 0) {
 			targetH += 1 + (int)(distance/H_MOVE);
-			server.sendToClient("Detected Grid: ("+targetH+","+targetW+")");
 			for (int h=robotH+1; h<targetH && h<=H_GRID-1 && h>=0; h++){
-				server.sendToClient("Update false: " + h + "," + targetW + "\n");
 				map.update(h, targetW, false);
 			}
 		} else if (sensorHeading == 180) {
 			targetH -= 1 + (int)(distance/H_MOVE);
-			server.sendToClient("Detected Grid: ("+targetH+","+targetW+")");
 			for (int h=targetH+1; h<robotH && h<=H_GRID-1 && h>=0; h++){
 				//Button.waitForAnyPress();
 				map.update(h, targetW, false);
 			}
 		} else if (sensorHeading == 90) {
 			targetW += 1 + (int)(distance/W_MOVE);
-			server.sendToClient("Detected Grid: ("+targetH+","+targetW+")");
 			for (int w=robotW+1; w<targetW && w<=W_GRID-1 && w>=0; w++){
 				map.update(targetH, w, false);
 			}
  		} else if (sensorHeading == -90) {
  			targetW -= 1 + (int)(distance/W_MOVE);
- 			server.sendToClient("Detected Grid: ("+targetH+","+targetW+")");
 			for (int w=targetW+1; w<robotW && w<=W_GRID-1 && w>=0; w++){
 				map.update(targetH, w, false);
 			}
  		} 
+		server.sendToClient("Detected Grid: ("+targetH+","+targetW+")");
 		if (targetH<=H_GRID-1 && targetW<=W_GRID-1 && targetH>= 0 && targetW>= 0) {
 			map.update(targetH,targetW, true);
 		}
@@ -350,7 +333,6 @@ public class SmartRobot {
 			Sound.beep();
 			map.updateEndPoint(new int[]{robotH,robotW});
 			if (readyToEnd){
-				taskFinished = true;
 				Sound.twoBeeps();
 				stop();
 				return;
@@ -360,29 +342,24 @@ public class SmartRobot {
 		uSensorMotor.rotate(-90);
 		double lastRightDist = rightDistance;
 		rightDistance = getSingleDistance();
-		//server.sendToClient("Last: " + lastHeading);
-		//server.sendToClient("Right: " + getHeading());
-		//server.sendToClient("Last=Right? " + (lastHeading==getHeading()));
-		if (lastHeading == getHeading() && rightDistance < W_MOVE) {
+		if (lastHeading == getHeading()) {
 			needCalibrating = true;
-		} else {
-			needCalibrating = false;
 		}
-		//server.sendToClient("Calirate? " + needCalibrating);
 		if (needCalibrating == true) {
 			firstCalibrate(lastRightDist, rightDistance);
 		}
 		// second calibrate (adjust front distance)
 		uSensorMotor.rotate(90);
 		frontDistance = getSingleDistance();
-		secondCalibrate();
+		if (needCalibrating == true) {
+			secondCalibrate();	
+		}
 		// now hopefully we can get the right information
 		// front
 		frontDistance = getSingleDistance();
 		processInformation(frontDistance, 0);
 		// left
 		uSensorMotor.rotate(90);
-		//Button.waitForAnyPress();
 		leftDistance = getSingleDistance();
 		processInformation(leftDistance, 90);
 		// front again
@@ -409,7 +386,7 @@ public class SmartRobot {
 	}
 
 	private String makeMessage() {
-		String message = "======================================================================\n";
+		String message = "==================================================================";
 		message += "Step " + (++step) + ":\n";
 		message += "Current Grid: (" + robotH + "," + robotW + ")\n"; 
 		message += "Last Heading: " + lastHeading + "\n";
@@ -417,7 +394,7 @@ public class SmartRobot {
 		message += "front Distance: " + frontDistance + "\n";
 		message += "Left Distance: " + leftDistance + "\n";
 		message += "Right Distance: " + rightDistance + "\n";
-		//Button.waitForAnyPress();
+		Button.waitForAnyPress();
 		return message;
 	}
 	
@@ -449,10 +426,13 @@ public class SmartRobot {
 		double remainder;
 		if (heading % 180 == 0){
 			remainder = frontDistance % H_MOVE;
+			if (DEBUG_MODE){
+				System.out.println("Remainder: " + remainder);
+				//Button.waitForAnyPress();
+			}
 			pilot.travel(remainder-RESERVED_DIST_H);
 		} else {
 			remainder = frontDistance % W_MOVE;
-			pilot.travel(remainder-RESERVED_DIST_H);
 		}
 	}
 	
@@ -478,24 +458,7 @@ public class SmartRobot {
 	}*/
 	
 	private void thirdCalibrate() {
-		Sound.beep();
-		//Button.waitForAnyPress();
-		double dist;
-		if (getHeading() % 180 == 0) {
-			dist = rightDistance%W_MOVE-RESERVED_DIST_RIGHT;
-		} else {
-			dist = rightDistance%H_MOVE-RESERVED_DIST_RIGHT;
-		}
-		double sintheta = dist/THIRD_CALIBRATE_MOVE;
-		double theta = Math.asin(sintheta)*180/Math.PI;
-		if (theta > 15) theta = 15;
-		if (Math.abs(theta) > 8){
-			//server.sendToClient("The theta for third calibrate: " + theta);
-			pilot.rotate(-theta);
-			pilot.travel(-THIRD_CALIBRATE_MOVE);
-			pilot.rotate(theta);
-			pilot.travel(THIRD_CALIBRATE_MOVE);
-		} 
+		
 	}
 	
 	// stop the robot 
@@ -529,12 +492,11 @@ public class SmartRobot {
 	}
 
 	// move to a grid following a path that is found by A* search
-	private void navigateToGrid(int[] goal){
+	public void navigateToGrid(int[] goal){
 		while(robotH!=goal[0] || robotW!=goal[1]) {
 			LinkedList<int[]> path = map.aStarPathFinding(new int[]{robotH,robotW}, goal);
 			moveToGrid(path.get(0));
 		}
-		taskFinished = true;
 	}
 	
 	// move to a grid that next to the robot
@@ -543,7 +505,6 @@ public class SmartRobot {
 		lastHeading = heading;
 		if (goal[0] == robotH+1) {
 			// go up
-			server.sendToClient("Go Up");
 			if (heading == 0){
 				move(H_MOVE);
 			} else if (heading == 180) {
@@ -556,7 +517,6 @@ public class SmartRobot {
 			needCalibrating = true;
 		} else if (goal[0] == robotH-1){
 			// go down
-			server.sendToClient("Go Down");
 			if (heading == 0){
 				move(-H_MOVE);
 			} else if (heading == 180) {
@@ -567,7 +527,6 @@ public class SmartRobot {
 			}
 		} else if (goal[1] == robotW+1) {
 			// go left
-			server.sendToClient("Go Left");
 			if (heading == 90) {
 				move(-W_MOVE);
 			} else if (heading == -90) {
@@ -581,7 +540,6 @@ public class SmartRobot {
 			}
 		} else if (goal[1] == robotW-1) {
 			// go right
-			server.sendToClient("Go Right");
 			if (heading == 90) {
 				move(W_MOVE);
 			} else if (heading == -90) {
@@ -599,7 +557,7 @@ public class SmartRobot {
 	}
 	
 	// follow a path until the task is finished
-	private void followPath(LinkedList<int[]> thePath){
+	public void followPath(LinkedList<int[]> thePath){
 		for (int[] grid: thePath){
 			moveToGrid(grid);
 			if (taskFinished) {
@@ -609,7 +567,7 @@ public class SmartRobot {
 	}
 	
 	// keep finding the end point until the task is finished
-	private void findEndPoint(){
+	public void findEndPoint(){
 		while(!taskFinished){
 			LinkedList<int[]> bestExplorationPath = map.findTheBestPathToExplore(new int[]{robotH,robotW});
 			followPath(bestExplorationPath);
