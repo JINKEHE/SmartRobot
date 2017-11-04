@@ -17,10 +17,9 @@ public class DrawingThread extends Thread {
 		while (true) {
 			myRobot.drawMap();
 			try {
-				// wait for some time
 				Thread.sleep(delay);
 			} catch (InterruptedException e) {
-				// pass
+				myRobot.server.sendToClient("Updated failed. Drawing Map thread failed.");
 			}
 		}
 	}

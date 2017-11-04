@@ -5,8 +5,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
 
-import threads.ServerThread;
-
 // the class of Occupancy Grid Map
 public class OccupancyGridMap {
 	// the height, width of the map

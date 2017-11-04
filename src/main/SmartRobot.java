@@ -35,7 +35,6 @@ import lejos.hardware.lcd.GraphicsLCD;
 public class SmartRobot {
 	private Brick ev3;
 	private EV3TouchSensor leftBump, rightBump;
-	private EV3IRSensor irSensor;
 	private EV3UltrasonicSensor uSensor;
 	private EV3ColorSensor cSensor;
 	private SampleProvider leftBumpSP, rightBumpSP, colourSP, ultrasonicDistSP;
@@ -54,12 +53,12 @@ public class SmartRobot {
 	private boolean readyToEnd = false;
 	private int lastHeading = -1;
 	private int step = 0;
-	private ServerThread server;
+	public ServerThread server;
 	// keep track of the current location of the robot
 	private int robotH = 0;
 	private int robotW = 0;
 	// constant variables
-	private static final double HEIGHT_OF_ARENA = 190;
+	private static final double HEIGHT_OF_ARENA = 195;
 	private static final double WIDTH_OF_ARENA = 150;
 	// number of grids
 	private static final int H_GRID = 6;
@@ -67,16 +66,18 @@ public class SmartRobot {
 	// distance of each movement
 	private static final double H_MOVE = HEIGHT_OF_ARENA / H_GRID;
 	private static final double W_MOVE = WIDTH_OF_ARENA / W_GRID;
-	private static final double RESERVED_DIST_H = 11;
-	private static final double RESERVED_DIST_RIGHT = 13;
-	private static final double THIRD_CALIBRATE_MOVE = 9;
+	private static final double RESERVED_DIST_H = 10.5;
+	private static final double RESERVED_DIST_W = 8;
+	private static final double RESERVED_DIST_RIGHT = 12;
+	private static final double THIRD_CALIBRATE_MOVE = 12;
+	private static final int SCAN_DELAY = 10;
 	// offset and diameter
 	private static final double DIAMETER = 3.3;
 	private static final double OFFSET = 10;
 	private static final double ANGULAR_SPEED = 100;
 	private static final double ANGULAR_ACCELERATION = 200;
-	private static final double BLUE_COLOR_THRESHOLD = 0.1;
-	private static final int REPEAT_SCAN_TIMES = 6;
+	private static final float BLUE_COLOR = 2.0f;
+	private static final int REPEAT_SCAN_TIMES = 8;
 	// set up ultrasonic sensor
 	private void setupUltrasonicSensor() {
 		uSensorMotor = Motor.A;
@@ -90,20 +91,23 @@ public class SmartRobot {
 		float validCount = 0;
 		float validSum = 0;
 		for (int i=0; i<=REPEAT_SCAN_TIMES-1; i++){
+			try {
+				Thread.sleep(SCAN_DELAY);
+			} catch (InterruptedException e) {
+				// I'm sure exception won't happen here
+			}
 			ultrasonicDistSP.fetchSample(ultrasonicDistSample, 0);
 			float dist = ultrasonicDistSample[0] * 100;
 			if (!Float.isInfinite(dist)) {
 				validCount += 1;
 				validSum += dist;
+			} else {
+				server.sendToClient("Got Inifinity");
 			}
 		}
 		if (validCount == 0){
-			uSensorMotor.rotate(-3);
-			float upperDist = getSingleDistance();
-			uSensorMotor.rotate(6);
-			float lowerDist = getSingleDistance();
-			uSensorMotor.rotate(-3);
-			return (upperDist+lowerDist)/2;
+			Button.waitForAnyPress();
+			return 1000;
 		} else {
 			return validSum / validCount;
 		}
@@ -112,7 +116,7 @@ public class SmartRobot {
 	// set up the color sensor -> using RED mode
 	private void setupColorSensor() {
 		cSensor = new EV3ColorSensor(ev3.getPort("S4"));
-		colourSP = cSensor.getRedMode();
+		colourSP = cSensor.getColorIDMode();
 		colourSample = new float[colourSP.sampleSize()];
 	}
 	
@@ -180,7 +184,6 @@ public class SmartRobot {
 	private void closeRobot() {
 		leftBump.close();
 		rightBump.close();
-		irSensor.close();
 		cSensor.close();
 		uSensor.close();
 	}
@@ -338,12 +341,13 @@ public class SmartRobot {
 	
 	// get information from the environment using sensors
 	private void getInformation() {
+		server.sendToClient("Step: " + (++step) + "\n");
 		// if blue is detected
 		float colorDetected = getColor();
 		if (robotH<=H_GRID-1&&robotH>=0&&robotW<=W_GRID-1&&robotW>=0){
 			map.updatePassed(robotH, robotW);
 		}
-		if (colorDetected < BLUE_COLOR_THRESHOLD){
+		if (colorDetected == BLUE_COLOR){
 			Sound.beep();
 			map.updateEndPoint(new int[]{robotH,robotW});
 			if (readyToEnd){
@@ -357,14 +361,15 @@ public class SmartRobot {
 		uSensorMotor.rotate(-90);
 		double lastRightDist = rightDistance;
 		rightDistance = getSingleDistance();
-		//server.sendToClient("Last: " + lastHeading);
-		//server.sendToClient("Right: " + getHeading());
-		//server.sendToClient("Last=Right? " + (lastHeading==getHeading()));
+		server.sendToClient("Last: " + lastHeading);
+		server.sendToClient("Right: " + getHeading());
+		server.sendToClient("Last=Right? " + (lastHeading==getHeading()));
 		if (lastHeading == getHeading() && rightDistance < W_MOVE) {
 			needCalibrating = true;
 		} else {
 			needCalibrating = false;
 		}
+		server.sendToClient("Calibrate? " + needCalibrating + "\n");
 		//server.sendToClient("Calirate? " + needCalibrating);
 		if (needCalibrating == true) {
 			firstCalibrate(lastRightDist, rightDistance);
@@ -372,7 +377,9 @@ public class SmartRobot {
 		// second calibrate (adjust front distance)
 		uSensorMotor.rotate(90);
 		frontDistance = getSingleDistance();
-		secondCalibrate();
+		if (frontDistance < HEIGHT_OF_ARENA){
+			secondCalibrate();
+		}
 		// now hopefully we can get the right information
 		// front
 		frontDistance = getSingleDistance();
@@ -403,11 +410,11 @@ public class SmartRobot {
 			thirdCalibrate();
 		}
 		uSensorMotor.rotate(90);
+		drawMap();
 	}
 
 	private String makeMessage() {
 		String message = "======================================================================\n";
-		message += "Step " + (++step) + ":\n";
 		message += "Current Grid: (" + robotH + "," + robotW + ")\n"; 
 		message += "Last Heading: " + lastHeading + "\n";
 		message += "Heading: " + getHeading() + "\n";
@@ -445,11 +452,14 @@ public class SmartRobot {
 		double heading = getHeading();
 		double remainder;
 		if (heading % 180 == 0){
-			remainder = frontDistance % H_MOVE;
+			remainder = frontDistance%H_MOVE;
+			server.sendToClient("Remainder: " + remainder + "\n");
+			server.sendToClient("RESERVED: " + RESERVED_DIST_H + "\n");
+			server.sendToClient("Travel distance: " + (remainder-RESERVED_DIST_H) + "\n");
 			pilot.travel(remainder-RESERVED_DIST_H);
 		} else {
 			remainder = frontDistance % W_MOVE;
-			pilot.travel(remainder-RESERVED_DIST_H);
+			pilot.travel(remainder-RESERVED_DIST_W);
 		}
 	}
 	
@@ -483,9 +493,17 @@ public class SmartRobot {
 		} else {
 			dist = rightDistance%H_MOVE-RESERVED_DIST_RIGHT;
 		}
+		server.sendToClient("Dist: " + dist + "\n");
 		double sintheta = dist/THIRD_CALIBRATE_MOVE;
-		double theta = Math.asin(sintheta)*180/Math.PI;
+		server.sendToClient("The sin theta: " + sintheta + "\n");
+		double theta;
+		if (sintheta > 1) {
+			theta = 75;
+		} else {
+			theta = Math.asin(sintheta)*180/Math.PI;
+		}
 		if (theta > 15) theta = 15;
+		server.sendToClient("The theta for third: " + theta + "\n");
 		if (Math.abs(theta) > 8){
 			//server.sendToClient("The theta for third calibrate: " + theta);
 			pilot.rotate(-theta);
@@ -505,7 +523,7 @@ public class SmartRobot {
 
 	// draw the map on the LCD screen
 	public void drawMap() {
-		//System.out.println("\n\n\n\n\n\n");
+		System.out.println("\n\n\n\n\n\n");
 		lcd.clear();
 		int bias = 5;
 		int len = 15;
@@ -627,11 +645,21 @@ public class SmartRobot {
 		server = new ServerThread();
 		server.start();
 		new StoppingThread(this).start();
-		new DrawingThread(this,200).start();
-		arbitrator.go();
+		new DrawingThread(this,20).start();
+		//arbitrator.go();
+		int i = 0;
+		while(i++<5){
+			frontDistance = getSingleDistance();
+			secondCalibrate();
+			server.sendToClient("Front Distance: " + frontDistance + "\n");
+			server.sendToClient("Front: " + (frontDistance%H_MOVE));
+			move(H_MOVE);
+			Button.waitForAnyPress();
+		}
 		//pilot.rotate(-90);
 		Sound.beepSequence();
 		Sound.beepSequenceUp();
+		Sound.twoBeeps();
 	}
 	
 	public static void main(String[] args) {
