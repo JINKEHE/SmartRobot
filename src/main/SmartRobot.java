@@ -6,7 +6,6 @@ import lejos.hardware.Brick;
 import lejos.hardware.BrickFinder;
 import lejos.hardware.Button;
 import lejos.hardware.sensor.EV3ColorSensor;
-import lejos.hardware.sensor.EV3IRSensor;
 import lejos.hardware.sensor.EV3TouchSensor;
 import lejos.hardware.sensor.EV3UltrasonicSensor;
 import lejos.robotics.SampleProvider;
@@ -25,12 +24,6 @@ import lejos.hardware.motor.Motor;
 import lejos.hardware.motor.NXTRegulatedMotor;
 import lejos.hardware.Sound;
 import lejos.hardware.lcd.GraphicsLCD;
-
-// to do
-// change distance every grid using ultrasonic sensor
-// make get distance method more accurate
-// pilot angular speed
-// configuration file
                       
 public class SmartRobot {
 	private Brick ev3;
@@ -218,9 +211,12 @@ public class SmartRobot {
 	}
 	
 	// whether the robot is at a corner
+	// not useful anymore
+	/* 
 	private boolean robotIsAtCorner(){
 		return (robotH==0||robotH==H_GRID-1)&&(robotW==0||robotW==W_GRID-1);
 	}
+	*/
 	
 	// move a specific distance and keep track of the grid the robot is currently in
 	private void move(double distance) {
@@ -372,13 +368,13 @@ public class SmartRobot {
 		server.sendToClient("Calibrate? " + needCalibrating + "\n");
 		//server.sendToClient("Calirate? " + needCalibrating);
 		if (needCalibrating == true) {
-			firstCalibrate(lastRightDist, rightDistance);
+			adjustAngleBetweenRightWall(lastRightDist, rightDistance);
 		}
 		// second calibrate (adjust front distance)
 		uSensorMotor.rotate(90);
 		frontDistance = getSingleDistance();
 		if (frontDistance < HEIGHT_OF_ARENA){
-			secondCalibrate();
+			adjustDistanceBetweenFrontWall();
 		}
 		// now hopefully we can get the right information
 		// front
@@ -407,12 +403,13 @@ public class SmartRobot {
 		rightDistance = getSingleDistance();
 		*/
 		if (needCalibrating == true) {
-			thirdCalibrate();
+			adjustRightWallDistance();
 		}
 		uSensorMotor.rotate(90);
 		drawMap();
 	}
 
+	// send essential data to the client (PC)
 	private String makeMessage() {
 		String message = "======================================================================\n";
 		message += "Current Grid: (" + robotH + "," + robotW + ")\n"; 
@@ -421,12 +418,14 @@ public class SmartRobot {
 		message += "front Distance: " + frontDistance + "\n";
 		message += "Left Distance: " + leftDistance + "\n";
 		message += "Right Distance: " + rightDistance + "\n";
-		//Button.waitForAnyPress();
 		return message;
 	}
 	
-	// do some calibration
-	private void firstCalibrate(double lastRightDist, double rightDist){
+	// the first calibration
+	
+	// the purpose of this calibration is to make the robot parallel to the right wall
+	// this calibration is the basis for the other two calibrations
+	private void adjustAngleBetweenRightWall(double lastRightDist, double rightDist){
 		double lastRight, right;
 		double theta, tantheta;
 		if (getHeading() % 180 == 0) {
@@ -442,13 +441,14 @@ public class SmartRobot {
 		Pose oldPose = poseProvider.getPose();
 		Pose copyPose = new Pose(oldPose.getX(), oldPose.getY(), oldPose.getHeading());
 		pilot.rotate(theta);
-		/*
-		
-		*/
 		poseProvider.setPose(copyPose);
 	}
 	
-	private void secondCalibrate() {
+	// the second calibration
+	
+	// the purpose of this calibration is to adjust the distance between the robot and the
+	// front wall to make sure it is in the grid which it thinks it is in.
+	private void adjustDistanceBetweenFrontWall() {
 		double heading = getHeading();
 		double remainder;
 		if (heading % 180 == 0){
@@ -463,31 +463,26 @@ public class SmartRobot {
 		}
 	}
 	
-	/*
-	private void thirdCalibrate() {
-		double sintheta, theta;
-		if(!robotIsAtCorner()){
-			Pose oldPose = poseProvider.getPose();
-			Pose copyPose = new Pose(oldPose.getX(), oldPose.getY(), oldPose.getHeading());
-			if (getHeading()%180==0){
-				sintheta=(RESERVED_DIST_RIGHT-rightDistance)/H_MOVE;
-			} else{
-				sintheta=(RESERVED_DIST_RIGHT-rightDistance)/W_MOVE;
-			}
-			lcd.clear();
-			if (Math.abs(sintheta)>1){
-				Button.waitForAnyPress();
-			}
-			theta=Math.asin(sintheta)*180/Math.PI;
-			pilot.rotate(-4*theta/5);
-			poseProvider.setPose(copyPose);
-		}
-	}*/
+	// the third calibration
 	
-	private void thirdCalibrate() {
+	// a strange but effective method to adjust the distance between the robot and the right wall
+	
+	// when the distance between the robot and the right wall is too small, it would rotate left
+	// for an angle, and move backwards (the grid behind must be empty) and then rotate right to
+	// make it parallel to the right wall and then move forwards so that the robot keeps parallel
+	// to the right wall and successfully makes the distance between it and the right wall shorter.
+	
+	// the robot would do a similar but reverse operation when the distance between it and the right
+	// wall is too large
+	
+	// the purpose of this calibration to make sure the distance between the robot and the wall on its
+	// right is within an acceptable range. We noticed that when the distance is too small, the robot
+	// cannot rotate successfully while a large distance would make the distances detected by the ultrasonic
+	// sensor not inaccurate.
+	private void adjustRightWallDistance() {
 		Sound.beep();
-		//Button.waitForAnyPress();
 		double dist;
+		// calculate the difference between the expected distance and the real distance
 		if (getHeading() % 180 == 0) {
 			dist = rightDistance%W_MOVE-RESERVED_DIST_RIGHT;
 		} else {
@@ -496,6 +491,7 @@ public class SmartRobot {
 		server.sendToClient("Dist: " + dist + "\n");
 		double sintheta = dist/THIRD_CALIBRATE_MOVE;
 		server.sendToClient("The sin theta: " + sintheta + "\n");
+		// calculate the angle to rotate
 		double theta;
 		if (sintheta > 1) {
 			theta = 75;
@@ -504,6 +500,7 @@ public class SmartRobot {
 		}
 		if (theta > 15) theta = 15;
 		server.sendToClient("The theta for third: " + theta + "\n");
+		// when the calculated angle is too small, which means the distance is acceptable, skip this calibration
 		if (Math.abs(theta) > 8){
 			//server.sendToClient("The theta for third calibrate: " + theta);
 			pilot.rotate(-theta);
@@ -650,7 +647,7 @@ public class SmartRobot {
 		int i = 0;
 		while(i++<5){
 			frontDistance = getSingleDistance();
-			secondCalibrate();
+			adjustDistanceBetweenFrontWall();
 			server.sendToClient("Front Distance: " + frontDistance + "\n");
 			server.sendToClient("Front: " + (frontDistance%H_MOVE));
 			move(H_MOVE);

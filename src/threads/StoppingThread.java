@@ -3,7 +3,7 @@ import lejos.hardware.Button;
 import lejos.hardware.Keys;
 import main.SmartRobot;
 
-// this thread is used to turn off the robot at any moment by clicking the ESCAPE button
+// this thread enables the user to turn off the robot at any moment by clicking the Escape  Button
 public class StoppingThread extends Thread {
 	private SmartRobot robot;
 	public StoppingThread(SmartRobot robot){
@@ -13,7 +13,7 @@ public class StoppingThread extends Thread {
 	public void run(){
 		while (true) {
 			if (Button.getButtons() == Keys.ID_ESCAPE){
-				// call the robot's closing method
+				// call the robot's stopping method
 				robot.stop();
 			}
 		}
