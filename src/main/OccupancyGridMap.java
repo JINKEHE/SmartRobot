@@ -58,8 +58,10 @@ public class OccupancyGridMap {
 	
 	// update a grid's information
 	public void update(int h, int w, boolean isSeenOccupied) {
-		detectedTimes[h][w] += 1;
-		occupiedTimes[h][w] += isSeenOccupied ? 1 : -1;
+		if (passedBy[h][w] != 1) {
+			detectedTimes[h][w] += 1;
+			occupiedTimes[h][w] += isSeenOccupied ? 1 : -1;
+		}
 	}
 	
 	// get the end point

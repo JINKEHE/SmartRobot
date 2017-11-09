@@ -1,4 +1,5 @@
 package main;
+import java.text.DecimalFormat;
 import java.util.LinkedList;
 import behaviors.MoveBehavior;
 import lejos.hardware.Brick;
@@ -41,7 +42,7 @@ public class SmartRobot {
 	private GraphicsLCD lcd;
 	private double rightDistance, frontDistance, leftDistance;
 	public OdometryPoseProvider poseProvider;
-	private boolean needCalibrating = false;
+	//private boolean needCalibrating = false;
 	private boolean taskFinished = false;
 	private boolean readyToEnd = false;
 	private int lastHeading = -1;
@@ -67,11 +68,12 @@ public class SmartRobot {
 	// offset and diameter
 	private static final double DIAMETER = 3.3;
 	private static final double OFFSET = 10;
-	private static final double ANGULAR_SPEED = 100;
+	private static final double ANGULAR_SPEED = 50;
 	private static final double ANGULAR_ACCELERATION = 200;
 	private static final float BLUE_COLOR = 0.15f;
-	private static final int REPEAT_SCAN_TIMES = 20;
+	private static final int REPEAT_SCAN_TIMES = 6;
 	private StoppingThread stoppingThread;
+	private static DecimalFormat df = new DecimalFormat("#.#");
 	// set up ultrasonic sensor
 	private void setupUltrasonicSensor() {
 		uSensorMotor = Motor.A;
@@ -80,33 +82,54 @@ public class SmartRobot {
 		ultrasonicDistSample = new float[ultrasonicDistSP.sampleSize()];
 	}
 
-	// get the distance of the nearest object
-	private float getSingleDistance() {
-		float validCount = 0;
-		float validSum = 0;
-		for (int i=0; i<=REPEAT_SCAN_TIMES-1; i++){
-			try {
-				Thread.sleep(SCAN_DELAY);
-			} catch (InterruptedException e) {
-				// I'm sure exception won't happen here
-			}
-			ultrasonicDistSP.fetchSample(ultrasonicDistSample, 0);
-			float dist = ultrasonicDistSample[0] * 100;
-			if (!Float.isInfinite(dist)) {
-				validCount += 1;
-				validSum += dist;
-			} else {
-				server.sendToClient("Got Inifinity");
+	// get a single distance
+	// if there's an infinity, move backwards and get the distance again until
+	// there's no infinity
+	private float getDistanceOnce() {
+		try {
+			Thread.sleep(SCAN_DELAY);
+		} catch (InterruptedException e) {
+		}
+		ultrasonicDistSP.fetchSample(ultrasonicDistSample, 0);
+		float dist = ultrasonicDistSample[0] * 100;
+		int c = 1;
+		while (Float.isInfinite(dist)) {
+			if (c == 1) {
 				pilot.travel(-1);
+				ultrasonicDistSP.fetchSample(ultrasonicDistSample, 0);
+				dist = ultrasonicDistSample[0] * 100;
+				c = -1;
+			} else if (c == -1) {
+				pilot.rotate(1);
+				ultrasonicDistSP.fetchSample(ultrasonicDistSample, 0);
+				dist = ultrasonicDistSample[0] * 100;
+				pilot.rotate(-1);
+				c = 1;
 			}
 		}
-		if (validCount == 0){
-			//Button.waitForAnyPress();
-			server.sendToClient("RETURN 1000\n");
-			return 1000;
-		} else {
-			return validSum / validCount;
+		return dist;
+	}
+	
+	// get the distance of the nearest object
+	private double getDistance() {
+		double threshold = 0.5;
+		double average;
+		while (true) {
+			average = 0;
+			float[] dists = new float[REPEAT_SCAN_TIMES];
+			for (int i=0; i<=REPEAT_SCAN_TIMES-1; i++) {
+				dists[i] = getDistanceOnce();
+				//server.sendToClient("\ndist: " + dists[i] + "\n");
+				average += dists[i]/REPEAT_SCAN_TIMES;
+			}
+			for (int i=0; i<=REPEAT_SCAN_TIMES-1; i++) {
+				if (Math.abs(average-dists[i])>threshold) {
+					continue;
+				}
+			}
+			break;
 		}
+		return average;
 	}
 
 	// set up the color sensor -> using RED mode
@@ -151,14 +174,14 @@ public class SmartRobot {
 
 	// create a new occupancy grid map
 	private void setupGridMap() {
-	
 		map = new OccupancyGridMap(H_GRID, W_GRID);
 		/*
 		for (int i=0; i<=H_GRID-1; i++){
 			for (int j=0; j<=W_GRID-1; j++){
 				map.update(i, j, false);
 			}
-		}
+		}*/
+		/*
 		readyToEnd = true;
 		map.update(4, 1, true);
 		//map.update(1, 4, true);
@@ -171,6 +194,7 @@ public class SmartRobot {
 		moveBehavior = new MoveBehavior(this);
 		Behavior[] behaviors = { moveBehavior };
 		arbitrator = new Arbitrator(behaviors, false);
+		System.out.println("\n\n\n\n\n\n");
 		lcd.clear();
 	}
 
@@ -223,31 +247,6 @@ public class SmartRobot {
 	private boolean robotIsAtCorner(){
 		return (robotH==0||robotH==H_GRID-1)&&(robotW==0||robotW==W_GRID-1);
 	}
-	
-	
-	// move a specific distance and keep track of the grid the robot is currently in
-	/*
-	private void move(double distance) {
-		pilot.travel(distance);
-		int heading = getHeading();
-		int sign = distance > 0 ? 1 : -1;
-		switch(heading){
-		case 0:
-			robotH += 1 * sign;
-			break;
-		case 180:
-			robotH -= 1 * sign;
-			break;
-		case -90:
-			robotW += 1 * sign;
-			break;
-		case 90:
-			robotW -= 1 * sign;
-			break;
-		default:
-			break;
-		}
-	}*/
 	
 	private void move(double distance) {
 		int newH = robotH;
@@ -321,8 +320,10 @@ public class SmartRobot {
 		//Button.waitForAnyPress();
 		int heading = getHeading();
 		lastHeading = heading;
+		frontDistance = getDistance();
 		if ((heading % 180 != 0 && rightDistance > H_MOVE) || (heading % 180 == 0 && rightDistance > W_MOVE)) {
 			if (!(heading==0&&robotW==0||heading==-90&&robotH==H_GRID-1||heading==180&&robotW==W_GRID-1||heading==90&&robotH==0)) {
+				pilot.travel(5);
 				pilot.rotate(90);
 				if (getHeading() % 180 == 0) {
 					move(H_MOVE);
@@ -331,20 +332,19 @@ public class SmartRobot {
 					pilot.travel(-3);
 				}
 			}
-			needCalibrating = false;
 		} else if ((heading%180==0 && frontDistance<H_MOVE) || (heading%180!=0 && frontDistance<W_MOVE)) {
-			pilot.travel(frontDistance-RESERVED_DIST_H);
-			pilot.rotate(-90);
-			needCalibrating = false;
-		} else if (heading % 180 == 0) {
-			if ((robotW==0 && heading == 0) || (robotW==W_GRID-1 && heading == 180)){
-				needCalibrating = true;
+			// also an obstacle on the left
+			if (leftDistance < W_MOVE) {
+				pilot.travel(frontDistance-RESERVED_DIST_H);
+				pilot.rotate(-180);
+				pilot.travel(-4);
+			} else {
+				pilot.travel(frontDistance-RESERVED_DIST_H);
+				pilot.rotate(-90);
 			}
+		} else if (heading % 180 == 0) {
 			move(H_MOVE);
 		} else {
-			if ((robotH==0 && heading == 90) || (robotH==H_GRID-1 && heading == -90)) {
-				needCalibrating = true;
-			}
 			move(W_MOVE);
 		}
 		// after returning to the start point, start to find the end point
@@ -393,6 +393,8 @@ public class SmartRobot {
 		drawMap();
 	}
 	
+	// check whether the robot is really in a grid with blue paper
+	// because sometimes the robot may go too far
 	private boolean blueCheck() {
 		int count = 0;
 		float[] results = new float[5];
@@ -416,6 +418,7 @@ public class SmartRobot {
 			return false;
 	}
 	
+	// check what color the grid is
 	private void colorCheck() {
 		// if blue is detected
 		float colorDetected = getColor();
@@ -444,55 +447,47 @@ public class SmartRobot {
 		// first calibrate (adjust heading)
 		uSensorMotor.rotate(-90);
 		double lastRightDist = rightDistance;
-		rightDistance = getSingleDistance();
-		server.sendToClient("Last: " + lastHeading);
-		server.sendToClient("Right: " + getHeading());
+		rightDistance = getDistance();
 		server.sendToClient("Last=Right? " + (lastHeading==getHeading()));
 		if (lastHeading == getHeading() && rightDistance < W_MOVE) {
-			needCalibrating = true;
-		} else {
-			needCalibrating = false;
-		}
-		server.sendToClient("Calibrate? " + needCalibrating + "\n");
-		if (needCalibrating == true) {
 			adjustAngleBetweenRightWall(lastRightDist, rightDistance);
 			adjustRightAngle();
 		}
 		// second calibrate (adjust front distance)
 		uSensorMotor.rotate(90);
-		frontDistance = getSingleDistance();
+		frontDistance = getDistance();
 		if (frontDistance < HEIGHT_OF_ARENA){
 			adjustDistanceBetweenFrontWall();
 		}
 		colorCheck();
 		// now hopefully we can get the right information
 		// front
-		frontDistance = getSingleDistance();
+		frontDistance = getDistance();
 		processInformation(frontDistance, 0);
 		// left
 		uSensorMotor.rotate(90);
-		leftDistance = getSingleDistance();
+		leftDistance = getDistance();
 		processInformation(leftDistance, 90);
-		if (leftDistance < W_MOVE && readyToEnd) {
+		if (leftDistance < W_MOVE && (rightDistance>W_MOVE || readyToEnd)) {
 			adjustLeftAngle();
 			if (canMoveBack()) {
-				leftDistance = getSingleDistance();
+				leftDistance = getDistance();
 				adjustLeftWallDistance();
 			}
 		}
 		// front again
 		uSensorMotor.rotate(-90);
-		frontDistance = getSingleDistance();
+		frontDistance = getDistance();
 		processInformation(frontDistance, 0);
 		// right
 		uSensorMotor.rotate(-90);
-		rightDistance = getSingleDistance();
+		rightDistance = getDistance();
 		processInformation(rightDistance, -90);
 		server.sendToClient(makeMessage());
 		if (rightDistance < W_MOVE) {
 			adjustRightAngle();
 			if (canMoveBack()) {
-				rightDistance = getSingleDistance();
+				rightDistance = getDistance();
 				adjustRightWallDistance();
 			}
 			//adjustAngle();
@@ -514,13 +509,14 @@ public class SmartRobot {
 		return message;
 	}
 	
+	// adjust the angle between the robot and the left wall
 	private void adjustLeftAngle(){
 		double move = 5;
 		double thres = 20;
 		pilot.travel(-move);
-		double lastLeft = getSingleDistance();
+		double lastLeft = getDistance();
 		pilot.travel(move);
-		double currentLeft = getSingleDistance();
+		double currentLeft = getDistance();
 		double tantheta = (currentLeft-lastLeft)/THIRD_CALIBRATE_MOVE;
 		double theta = Math.atan(tantheta)*180/Math.PI;
 		if (Math.abs(theta)>thres) theta = 0;
@@ -530,13 +526,15 @@ public class SmartRobot {
 		poseProvider.setPose(copyPose);
 	}
 	
+	// another version of adjustAngleBetweenRightWall method
+	// to make sure the robot is parallel to the right wall
 	private void adjustRightAngle(){
 		double move = 5;
 		double thres = 20;
 		pilot.travel(-move);
-		double lastRight = getSingleDistance();
+		double lastRight = getDistance();
 		pilot.travel(move);
-		double currentRight = getSingleDistance();
+		double currentRight = getDistance();
 		double tantheta = (currentRight-lastRight)/THIRD_CALIBRATE_MOVE;
 		double theta = Math.atan(tantheta)*180/Math.PI;
 		if (Math.abs(theta)>thres) theta = 0;
@@ -562,15 +560,15 @@ public class SmartRobot {
 			right=rightDist%W_MOVE;
 			tantheta = (right-lastRight)/W_MOVE;
 		}
-		server.sendToClient("lastRight: " + lastRight + "\n");
-		server.sendToClient("right: " + right + "\n");
-		server.sendToClient("tantheta: " + tantheta + "\n");
 		theta = Math.atan(tantheta)*180/Math.PI;
-		server.sendToClient("theta: " + theta + "\n");
+		// if the theta is too large, there might be some problems...
+		// we don't want the position provider know the robot has rotated becasue
+		// this is just a calibration
 		Pose oldPose = poseProvider.getPose();
 		Pose copyPose = new Pose(oldPose.getX(), oldPose.getY(), oldPose.getHeading());
-		//Button.waitForAnyPress();
-		pilot.rotate(theta);
+		if (Math.abs(theta) < 20) {
+			pilot.rotate(theta);	
+		}
 		poseProvider.setPose(copyPose);
 	}
 	
@@ -582,14 +580,14 @@ public class SmartRobot {
 		double heading = getHeading();
 		double remainder;
 		double distanceToMove = 0;
-		if (heading % 180 == 0){
+		if (heading % 180 == 0) {
 			remainder = frontDistance%H_MOVE;
 			distanceToMove = remainder-RESERVED_DIST_H;
 		} else {
 			remainder = frontDistance % W_MOVE;
 			distanceToMove = remainder-RESERVED_DIST_W;
 		}
-		if (distanceToMove < 10) {
+		if (distanceToMove < 8) {
 			pilot.travel(distanceToMove);
 		}
 	}
@@ -631,7 +629,6 @@ public class SmartRobot {
 	// cannot rotate successfully while a large distance would make the distances detected by the ultrasonic
 	// sensor not inaccurate.
 	private void adjustRightWallDistance() {
-		Sound.beep();
 		double dist;
 		// calculate the difference between the expected distance and the real distance
 		if (getHeading() % 180 == 0) {
@@ -649,7 +646,8 @@ public class SmartRobot {
 		} else {
 			theta = Math.asin(sintheta)*180/Math.PI;
 		}
-		if (theta > 15) theta = 15;
+		double threshold = 25;
+		if (theta > threshold) theta = threshold;
 		//server.sendToClient("The theta for third: " + theta + "\n");
 		// when the calculated angle is too small, which means the distance is acceptable, skip this calibration
 		if (Math.abs(theta) > 5){
@@ -695,6 +693,7 @@ public class SmartRobot {
 	// stop the robot 
 	public void stop() {
 		arbitrator.stop();
+		pilot.stop();
 		taskFinished = true;
 		Sound.beepSequenceUp();
 		drawMap();
@@ -717,7 +716,7 @@ public class SmartRobot {
 	
 	// draw the map on the LCD screen
 	public void drawMap() {
-		System.out.println("\n\n\n\n\n\nUpdated");
+		System.out.println("\n\n\n\n\n\n");
 		lcd.clear();
 		int bias = 5;
 		int len = 15;
@@ -738,14 +737,14 @@ public class SmartRobot {
 	}
 	
 	private void drawProbability() {
-		System.out.println("\n\n\n\n\n\nUpdated");
 		lcd.clear();
 		int bias = 5;
-		int len = 17;
+		int len = 19;
+		int width = 30;
 		for (int h=0; h<=H_GRID-1; h++) {
 			for (int w=0; w<=W_GRID-1; w++) {
-				lcd.drawRect(bias+len*w, bias+len*h, len, len);
-				lcd.drawString(String.valueOf(map.getGrid(H_GRID-1-h, W_GRID-1-w)), bias+len*w+3, bias+len*h+2, GraphicsLCD.VCENTER);
+				lcd.drawRect(bias+width*w, bias+len*h, width, len);
+				lcd.drawString(String.valueOf(df.format(map.getGrid(H_GRID-1-h, W_GRID-1-w))), bias+width*w+3, bias+len*h+2, GraphicsLCD.VCENTER);
 			}
 		}
 	}
@@ -779,8 +778,6 @@ public class SmartRobot {
 				pilot.rotate(-heading);
 				move(H_MOVE);
 			}
-			
-			needCalibrating = true;
 		} else if (goal[0] == robotH-1){
 			// go down
 			server.sendToClient("Go Down");
@@ -822,7 +819,6 @@ public class SmartRobot {
 			}
 		}
 		getInformation();
-		needCalibrating = true;
 	}
 	
 	// follow a path until the task is finished
