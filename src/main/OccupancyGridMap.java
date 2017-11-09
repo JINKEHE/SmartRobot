@@ -34,7 +34,7 @@ public class OccupancyGridMap {
 	}
 	
 	// get the occupied possibility of a grid
-	private double getGrid(int h, int w) {
+	public double getGrid(int h, int w) {
 		return 0.5 * (1 + 1.0*occupiedTimes[h][w]/detectedTimes[h][w]);
 	}
 	

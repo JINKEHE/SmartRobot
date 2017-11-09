@@ -11,7 +11,7 @@ public class StoppingThread extends Thread {
 		this.setDaemon(true);
 	}
 	public void run(){
-		while (true) {
+		while (!robot.isTaskFinished()) {
 			if (Button.getButtons() == Keys.ID_ESCAPE){
 				// call the robot's stopping method
 				robot.stop();
